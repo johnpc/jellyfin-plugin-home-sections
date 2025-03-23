@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Home Sections</title>
+    <style>
+        .homeSectionItem {
+            margin-bottom: 1.5em;
+            padding: 1.5em;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.3em;
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+        .homeSectionItem .handle {
+            cursor: move;
+            margin-right: 1em;
+        }
+        .homeSectionItem .sectionHeader {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1em;
+        }
+        .homeSectionItem .sectionName {
+            margin: 0;
+            flex-grow: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .homeSectionItem .sectionControls {
+            display: flex;
+            align-items: center;
+        }
+        .homeSectionItem .sectionControls button {
+            margin-left: 0.5em;
+        }
+        .homeSectionItem .sectionContent {
+            display: none;
+        }
+        .homeSectionItem.expanded .sectionContent {
+            display: block;
+        }
+        .noSections {
+            padding: 2em;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="HomeSectionsConfigPage" data-role="page" class="page type-interior pluginConfigurationPage">
+        <div data-role="content">
+            <div class="content-primary">
+                <form class="homeSectionsForm">
+                    <div class="verticalSection">
+                        <div class="sectionTitleContainer flex align-items-center">
+                            <h2 class="sectionTitle">Home Sections Configuration</h2>
+                            <button is="emby-button" type="button" class="raised button-alt headerHelpButton" id="addSectionBtn">
+                                <span>Add Section</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="homeSectionsList"></div>
+                    <div class="noSections hide">
+                        <p>No sections configured. Click "Add Section" to create your first home section.</p>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 2em;">
+                        <button is="emby-button" type="button" class="raised button-accent block" id="previewApiBtn">
+                            <span>Preview API Response</span>
+                        </button>
+                        <div id="apiResponseContainer" class="hide" style="margin-top: 1em; padding: 1em; background-color: rgba(0,0,0,0.2); border-radius: 0.3em; overflow: auto; max-height: 400px;">
+                            <pre id="apiResponse" style="white-space: pre-wrap; word-break: break-all;"></pre>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <template id="homeSectionTemplate">
+            <div class="homeSectionItem card">
+                <div class="sectionHeader">
+                    <i class="md-icon handle">drag_handle</i>
+                    <h3 class="sectionName"></h3>
+                    <div class="sectionControls">
+                        <button is="emby-button" type="button" class="fab mini editSection" title="Edit Section">
+                            <i class="md-icon">edit</i>
+                        </button>
+                        <button is="emby-button" type="button" class="fab mini removeSection" title="Remove Section">
+                            <i class="md-icon">delete</i>
+                        </button>
+                    </div>
+                </div>
+                <div class="sectionContent">
+                    <div class="inputContainer">
+                        <input is="emby-input" type="hidden" class="sectionId" name="sectionId" />
+                        <input is="emby-input" type="text" class="sectionNameInput" name="sectionName" required label="Section Name" />
+                    </div>
+
+                    <div class="selectContainer">
+                        <select is="emby-select" class="sectionType" name="sectionType" label="Section Type" required>
+                            <option value="LibraryTiles">Library Tiles</option>
+                            <option value="RecentlyAdded">Recently Added</option>
+                            <option value="PinnedCollection">Pinned Collection</option>
+                        </select>
+                    </div>
+                    
+                    <div class="selectContainer">
+                        <select is="emby-select" class="sectionViewType" name="sectionViewType" label="View Type">
+                            <option value="posterCard">Poster Card</option>
+                            <option value="thumbCard">Thumbnail Card</option>
+                            <option value="listItem">List</option>
+                            <option value="gridItem">Grid</option>
+                            <option value="banner">Banner</option>
+                            <option value="libraryButtons">Library Buttons</option>
+                            <option value="libraryCards">Library Cards</option>
+                        </select>
+                    </div>
+
+                    <div class="sectionTypeSettings">
+                        <!-- Settings for PinnedCollection -->
+                        <div class="collectionContainer hide">
+                            <div class="selectContainer">
+                                <select is="emby-select" class="collectionId" name="collectionId" label="Collection">
+                                    <option value="">Select a collection</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Settings for RecentlyAdded -->
+                        <div class="recentlyAddedContainer hide">
+                            <div class="inputContainer">
+                                <input is="emby-input" type="number" class="maxItems" name="maxItems" min="1" value="12" label="Maximum Items" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checkboxContainer">
+                        <label>
+                            <input is="emby-checkbox" type="checkbox" class="sectionEnabled" name="sectionEnabled" checked />
+                            <span>Enabled</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <script>
+            // Wait for document to be fully loaded
+            document.addEventListener('DOMContentLoaded', function() {
+                // Load Sortable.js if not already loaded
+                if (!window.Sortable) {
+                    var script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
+                    document.head.appendChild(script);
+                }
+            });
+
+            // Generate a GUID (UUID v4)
+            function generateGuid() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0,
+                        v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+            
+            // Update section settings based on type
+            function updateSectionSettings(sectionEl, type) {
+                // Hide all settings containers first
+                var containers = sectionEl.querySelectorAll('.sectionTypeSettings > div');
+                for (var i = 0; i < containers.length; i++) {
+                    containers[i].classList.add('hide');
+                }
+                
+                // Show the appropriate settings container based on type
+                if (type === 'PinnedCollection') {
+                    sectionEl.querySelector('.collectionContainer').classList.remove('hide');
+                } else if (type === 'RecentlyAdded') {
+                    sectionEl.querySelector('.recentlyAddedContainer').classList.remove('hide');
+                }
+            }
+            
+            // Create a new section element
+            function createSectionElement(section) {
+                var template = document.getElementById('homeSectionTemplate');
+                var sectionEl = template.content.cloneNode(true).querySelector('.homeSectionItem');
+                
+                // Set basic properties
+                sectionEl.querySelector('.sectionId').value = section.Id || '';
+                sectionEl.querySelector('.sectionNameInput').value = section.Name || '';
+                sectionEl.querySelector('.sectionName').innerText = section.Name || 'New Section';
+                sectionEl.querySelector('.sectionType').value = section.Type || 'LibraryTiles';
+                sectionEl.querySelector('.sectionViewType').value = section.ViewType || getDefaultViewType(section.Type || 'LibraryTiles');
+                sectionEl.querySelector('.maxItems').value = section.MaxItems || '12';
+                sectionEl.querySelector('.sectionEnabled').checked = section.Enabled !== false;
+                
+                // Initialize section settings based on type
+                updateSectionSettings(sectionEl, section.Type || 'LibraryTiles');
+                
+                // Set collection ID if available
+                if (section.Type === 'PinnedCollection' && section.CollectionId) {
+                    sectionEl.querySelector('.collectionId').value = section.CollectionId;
+                }
+                
+                // Handle section type change
+                sectionEl.querySelector('.sectionType').addEventListener('change', function() {
+                    updateSectionSettings(sectionEl, this.value);
+                    
+                    // Update view type to default for this section type
+                    var viewTypeEl = sectionEl.querySelector('.sectionViewType');
+                    viewTypeEl.value = getDefaultViewType(this.value);
+                });
+                
+                // Handle section name change
+                sectionEl.querySelector('.sectionNameInput').addEventListener('change', function() {
+                    sectionEl.querySelector('.sectionName').innerText = this.value || 'New Section';
+                });
+                
+                // Handle edit button
+                sectionEl.querySelector('.editSection').addEventListener('click', function() {
+                    sectionEl.classList.toggle('expanded');
+                });
+                
+                // Handle remove button
+                sectionEl.querySelector('.removeSection').addEventListener('click', function() {
+                    if (confirm('Are you sure you want to remove this section?')) {
+                        sectionEl.remove();
+                        updateNoSectionsMessage();
+                    }
+                });
+                
+                // Expand new sections by default
+                if (!section.Id) {
+                    sectionEl.classList.add('expanded');
+                }
+                
+                return sectionEl;
+            }
+            
+            // Get default view type based on section type
+            function getDefaultViewType(sectionType) {
+                switch (sectionType) {
+                    case 'LibraryTiles':
+                        return 'libraryButtons';
+                    case 'RecentlyAdded':
+                    case 'PinnedCollection':
+                        return 'posterCard';
+                    default:
+                        return 'posterCard';
+                }
+            }
+            
+            // Update the "no sections" message visibility
+            function updateNoSectionsMessage() {
+                var sectionsList = document.querySelector('.homeSectionsList');
+                var noSections = document.querySelector('.noSections');
+                
+                if (sectionsList.children.length === 0) {
+                    noSections.classList.remove('hide');
+                } else {
+                    noSections.classList.add('hide');
+                }
+            }
+            
+            // Load collections for dropdown
+            function loadCollections() {
+                Dashboard.showLoadingMsg();
+                
+                ApiClient.getItems(ApiClient.getCurrentUserId(), {
+                    IncludeItemTypes: "BoxSet",
+                    Recursive: true,
+                    SortBy: "SortName",
+                    SortOrder: "Ascending"
+                }).then(function (result) {
+                    var collections = result.Items || [];
+                    var selects = document.querySelectorAll('.collectionId');
+                    
+                    for (var i = 0; i < selects.length; i++) {
+                        var select = selects[i];
+                        var currentValue = select.value;
+                        
+                        // Clear existing options except the first one
+                        while (select.options.length > 1) {
+                            select.remove(1);
+                        }
+                        
+                        // Add collection options
+                        for (var j = 0; j < collections.length; j++) {
+                            var collection = collections[j];
+                            var option = document.createElement('option');
+                            option.value = collection.Id;
+                            option.innerText = collection.Name;
+                            select.appendChild(option);
+                        }
+                        
+                        // Restore selected value if it exists
+                        if (currentValue) {
+                            select.value = currentValue;
+                        }
+                    }
+                    
+                    Dashboard.hideLoadingMsg();
+                }).catch(function(error) {
+                    console.error('Error loading collections:', error);
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+            
+            // Initialize drag and drop
+            function initSortable() {
+                var sectionsList = document.querySelector('.homeSectionsList');
+                
+                if (window.Sortable) {
+                    try {
+                        window.Sortable.create(sectionsList, {
+                            handle: '.handle',
+                            animation: 150
+                        });
+                        console.log('Sortable initialized successfully');
+                    } catch (e) {
+                        console.error('Error initializing Sortable:', e);
+                    }
+                } else {
+                    console.warn('Sortable library not available, trying again in 1 second');
+                    setTimeout(initSortable, 1000);
+                }
+            }
+            
+            // Load plugin configuration
+            function loadConfig() {
+                Dashboard.showLoadingMsg();
+                
+                ApiClient.getPluginConfiguration('8a8b9759-3e5f-4c19-aaa3-fd7e7e9d1924').then(function (config) {
+                    var sectionsList = document.querySelector('.homeSectionsList');
+                    sectionsList.innerHTML = '';
+                    
+                    // Sort sections by SortOrder
+                    var sections = config.HomeSections || [];
+                    sections.sort(function(a, b) {
+                        return (a.SortOrder || 0) - (b.SortOrder || 0);
+                    });
+                    
+                    // Create section elements
+                    for (var i = 0; i < sections.length; i++) {
+                        var sectionEl = createSectionElement(sections[i]);
+                        sectionsList.appendChild(sectionEl);
+                    }
+                    
+                    // Update no sections message
+                    updateNoSectionsMessage();
+                    
+                    // Load collections for dropdown
+                    loadCollections();
+                    
+                    // Initialize drag and drop
+                    setTimeout(initSortable, 500);
+                    
+                    Dashboard.hideLoadingMsg();
+                }).catch(function(error) {
+                    console.error('Error loading configuration:', error);
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+            
+            // Save plugin configuration
+            function saveConfig() {
+                // Custom validation for collection selection
+                var pinnedCollectionSections = document.querySelectorAll('.homeSectionItem .sectionType');
+                var hasInvalidCollection = false;
+                
+                for (var i = 0; i < pinnedCollectionSections.length; i++) {
+                    var sectionType = pinnedCollectionSections[i];
+                    if (sectionType.value === 'PinnedCollection') {
+                        var sectionEl = sectionType.closest('.homeSectionItem');
+                        var collectionId = sectionEl.querySelector('.collectionId').value;
+                        
+                        if (!collectionId) {
+                            hasInvalidCollection = true;
+                            sectionEl.classList.add('expanded');
+                            var sectionName = sectionEl.querySelector('.sectionName').innerText;
+                            alert('Please select a collection for section: ' + sectionName);
+                            sectionEl.querySelector('.collectionId').focus();
+                            return;
+                        }
+                    }
+                }
+                
+                Dashboard.showLoadingMsg();
+                
+                var sections = [];
+                var sortOrder = 0;
+                var sectionElements = document.querySelectorAll('.homeSectionItem');
+                
+                for (var i = 0; i < sectionElements.length; i++) {
+                    var sectionEl = sectionElements[i];
+                    var sectionType = sectionEl.querySelector('.sectionType').value;
+                    
+                    var section = {
+                        Id: sectionEl.querySelector('.sectionId').value || generateGuid(),
+                        Name: sectionEl.querySelector('.sectionNameInput').value,
+                        Type: sectionType,
+                        ViewType: sectionEl.querySelector('.sectionViewType').value,
+                        Enabled: sectionEl.querySelector('.sectionEnabled').checked,
+                        SortOrder: sortOrder++
+                    };
+                    
+                    // Add type-specific settings
+                    if (sectionType === 'PinnedCollection') {
+                        section.CollectionId = sectionEl.querySelector('.collectionId').value;
+                    }
+                    
+                    if (sectionType === 'RecentlyAdded') {
+                        var maxItems = sectionEl.querySelector('.maxItems').value;
+                        if (maxItems) {
+                            section.MaxItems = parseInt(maxItems, 10);
+                        }
+                    }
+                    
+                    sections.push(section);
+                }
+                
+                ApiClient.getPluginConfiguration('8a8b9759-3e5f-4c19-aaa3-fd7e7e9d1924').then(function (config) {
+                    config.HomeSections = sections;
+                    
+                    ApiClient.updatePluginConfiguration('8a8b9759-3e5f-4c19-aaa3-fd7e7e9d1924', config).then(function () {
+                        Dashboard.processPluginConfigurationUpdateResult();
+                        Dashboard.hideLoadingMsg();
+                    }).catch(function(error) {
+                        console.error('Error saving configuration:', error);
+                        Dashboard.hideLoadingMsg();
+                    });
+                }).catch(function(error) {
+                    console.error('Error getting configuration:', error);
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+            
+            // Initialize page
+            document.querySelector('#HomeSectionsConfigPage').addEventListener('pageshow', function() {
+                var page = this;
+                
+                // Add section button
+                page.querySelector('#addSectionBtn').addEventListener('click', function() {
+                    var newSection = {
+                        Name: 'New Section',
+                        Type: 'LibraryTiles',
+                        Enabled: true
+                    };
+                    
+                    var sectionEl = createSectionElement(newSection);
+                    page.querySelector('.homeSectionsList').appendChild(sectionEl);
+                    updateNoSectionsMessage();
+                    
+                    // Load collections for the new section
+                    loadCollections();
+                });
+                
+                // Form submit
+                page.querySelector('.homeSectionsForm').addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    saveConfig();
+                    return false;
+                });
+                
+                // Preview API button
+                page.querySelector('#previewApiBtn').addEventListener('click', function() {
+                    previewApiResponse();
+                });
+                
+                // Load configuration
+                loadConfig();
+            });
+            
+            // Preview API response
+            function previewApiResponse() {
+                var responseContainer = document.getElementById('apiResponseContainer');
+                var responseElement = document.getElementById('apiResponse');
+                
+                responseElement.textContent = 'Loading...';
+                responseContainer.classList.remove('hide');
+                
+                fetch(ApiClient.getUrl('HomeSections/GetHomeSections'))
+                    .then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('API request failed with status ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        responseElement.textContent = JSON.stringify(data, null, 2);
+                    })
+                    .catch(function(error) {
+                        responseElement.textContent = 'Error: ' + error.message;
+                    });
+            }
+        </script>
+    </div>
+</body>
+</html>

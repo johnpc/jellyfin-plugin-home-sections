@@ -1,0 +1,20 @@
+[
+    {
+        "guid": "8a8b9759-3e5f-4c19-aaa3-fd7e7e9d1924",
+        "name": "Home Sections",
+        "overview": "Enables creation of custom Home Sections API",
+        "description": "Enables creation of custom Home Sections API",
+        "owner": "johnpc",
+        "category": "General",
+        "versions": [
+            {
+                "version": "0.0.0.1",
+                "changelog": "Initial Release",
+                "targetAbi": "10.8.10.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.1/smart-collections-0.0.0.1.zip",
+                "checksum": "10110a16be92f4e8de84ac0c19fc316c",
+                "timestamp": "2025-06-06T01:40:00Z"
+            }
+        ]
+    }
+]
