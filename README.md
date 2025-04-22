@@ -1,3 +1,7 @@
+# This plugin is purely a proof of concept for http://github.com/jellyfin/jellyfin-meta/discussions/93. It's not meant to actually be used by anyone.
+
+-----
+
 # Jellyfin Home Sections Plugin
 
 A Jellyfin plugin that allows users to customize their home screen with configurable sections.
